@@ -1,0 +1,10 @@
+9c1162ffceca7c0a1acef930bc14c97c *DESCRIPTION
+9cb25ad89ac26899eeb5a492bdd61e70 *NAMESPACE
+9db01b89f26fee1c999926e50c0af8eb *R/genDWD.R
+66ab4638303e1413a96a58050fa720e6 *R/penaltyParameter.R
+eacd51eb30bcd5e062ed65f6d45850ab *data/mushrooms.rda
+dd86a445c7f8336a92923d86008f8970 *man/DWDLargeR-internal.Rd
+c506be8861d94d2a7f9ea43f474aa33a *man/DWDLargeR-package.Rd
+8f1dc890728297c6a051c9b573e3141c *man/genDWD.Rd
+c5cb790a818e6ef9ecf6d38abb5e3b31 *man/mushrooms.Rd
+51f01fe7b33c75fa7c5496a3f7524e79 *man/penaltyParameter.Rd

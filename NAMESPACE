@@ -1,0 +1,6 @@
+import("Matrix","SparseM")
+
+export(genDWD,sigma_update,linsysolve,smw,fnorm,penaltyParameter,polyRootsNewton,psqmr,precondfun,vecMultiply)
+
+importFrom("methods", "as", "new")
+importFrom("stats", "median")
