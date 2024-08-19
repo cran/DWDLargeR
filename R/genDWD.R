@@ -35,25 +35,15 @@ genDWD = function(X,y,C,expon, tol = 1e-5, maxIter = 2000, method = 1, printDeta
   np = length(idxpos)
   nn = length(idxneg)
   tstart = proc.time()
-
-  nnz = sum(X@ra!=0)
-  if (nnz > 0.4*dim*n && dim <= 5000){
-    X = as.matrix(X)
-  }
     
   ##
   ## remove zero features
   ##
   if (rmzeroFea!=0){
-    normX = sqrt(rowSums(as(X*X,"dgCMatrix")))
+    normX = sqrt(rowSums((as(X*X,"dgCMatrix"))))
     nzrow = which(normX>0)
     if (length(nzrow) < length(normX)){
-      if (is.matrix.csr(X)){
-        X = rbind(X[nzrow,1:n], 0*as.matrix.csr(1,1,n))
-      }
-      else{
-        X = rbind(X[nzrow,1:n], 0*rep(0,n))
-      }
+      X = rbind(X[nzrow,1:n], 0*rep(0,n))
       dim = nrow(X)
     }
   }
@@ -64,19 +54,15 @@ genDWD = function(X,y,C,expon, tol = 1e-5, maxIter = 2000, method = 1, printDeta
   if (scaleFea!=0){
     DD = 1
     if(dim > 0.5*n){
-      normX = sqrt(rowSums(as(X*X,"dgCMatrix")))
+      normX = sqrt(rowSums(X*X))
       if (max(normX) > 2*min(normX)){
         if (dim > 3*n){
-          DD = new("matrix.csr", ra = 1/pmax(1,sqrt(normX)), ja = 1:dim, ia = 1:(dim+1), dimension = c(dim,dim))
+          DD = sparseMatrix(x = 1/pmax(1,sqrt(normX)), j = 1:dim, p = 0:dim)
         }
         else{
-          DD = new("matrix.csr", ra = 1/pmax(1,normX), ja = 1:dim, ia = 1:(dim+1), dimension = c(dim,dim))
+          DD = sparseMatrix(x = 1/pmax(1,normX), j = 1:dim, p = 0:dim)
         }
-        if (is.matrix.csr(X)){
-          X = DD %*% X
-        } else{
-          X = as.matrix(DD) %*% X
-        }
+        X = DD %*% X
       }
     }
   }
@@ -115,11 +101,7 @@ genDWD = function(X,y,C,expon, tol = 1e-5, maxIter = 2000, method = 1, printDeta
   maxC = max(Cvec);
   
   ##
-  if(is.matrix.csr(X)){
-    Z = X %*% new("matrix.csr", ra = as.numeric(y), ja = 1:n, ia = 1:(n+1), dimension = c(n,n))
-  }else{
-    Z = X %*% diag(as.vector(y))
-  }
+  Z = X %*% .sparseDiagonal(n,y)
   scale_data = 1
   if (scale_data==1){
     Zscale = sqrt(fnorm(X))
@@ -131,7 +113,7 @@ genDWD = function(X,y,C,expon, tol = 1e-5, maxIter = 2000, method = 1, printDeta
   }
   sigma = sigma^expon
   sigmastart = sigma
-  normZ = 1+sqrt(max(colSums(as(Z*Z,"dgCMatrix"))))
+  normZ = 1+sqrt(max(colSums(Z*Z)))
 
   ##  
   ## initial iterate
@@ -159,34 +141,25 @@ genDWD = function(X,y,C,expon, tol = 1e-5, maxIter = 2000, method = 1, printDeta
   
   ZT = t(Z)
   if (Solver == 'direct'){ 
-    if (is.matrix.csr(X)){
-      M1 = Z %*% ZT + const*new("matrix.csr", ra = rep(1,dim), ja = 1:dim, ia = 1:(dim+1), dimension = c(dim,dim))
-      M4 = as.matrix.csr(t(y) %*% y)
-    } else{
-      M1 = Z %*% ZT + const*diag(dim)
-      M4 = t(y) %*% y
-    }
+    M1 = Z %*% ZT + const*diag(dim)
+    M4 = t(y) %*% y
     M2 = Z %*% y
     M3 = t(M2)
     M = rbind(cbind(M1,M2),cbind(M3,M4))
-    if (dim > 4000){
-      R = chol(M,tmpmax = 1000*dim)
-    }else{
-      R = chol(M)
-    }
+    R = Cholesky(M)
   }
   else if (Solver == 'SMW'){
     normy = fnorm(y)
     yunit = y/normy    
-    H11 = new("matrix.csr", ra = rep(1,n), ja = 1:n, ia = 1:(n+1), dimension = c(n,n)) + (1/const)*(ZT %*% Z)
-    R = chol(H11)
+    H11 = sparseMatrix(x = rep(1,n), j = 1:n, p = 0:n) + (1/const)*(ZT %*% Z)
+    R = Cholesky(H11)
     invH11yunit = linsysolve(R,yunit)
     schurmat = t(yunit) %*% invH11yunit
     schurvec = c(invH11yunit, -1)
   }
   else if (Solver == 'iterative'){
     ff = list("Z"=Z,"ZT"=ZT,"y"=y,"const"=const)
-    diagM = rowSums(as(Z*Z,"dgCMatrix")) + const
+    diagM = rowSums(Z*Z) + const
     L = list()
     L[["invdiagM"]] = 1/c(diagM,1)
     L[["precond"]] = 1
@@ -232,8 +205,9 @@ genDWD = function(X,y,C,expon, tol = 1e-5, maxIter = 2000, method = 1, printDeta
     
     # update w, beta
     tmp = rold - xiold + alphaold/sigma
-    rhs1 = as.matrix(Z %*% tmp) + const*uold + pold/sigma
+    rhs1 = Z %*% tmp + const*uold + pold/sigma
     rhs = rbind(rhs1,t(y) %*% tmp)
+    
     if (Solver == 'iterative'){
       psqmrTol = max(min(5e-2,1/(iter^2)),1e-8)*max(1,sqrt(fnorm(rhs)))
       psqmrMaxiter = 100
@@ -252,11 +226,11 @@ genDWD = function(X,y,C,expon, tol = 1e-5, maxIter = 2000, method = 1, printDeta
     else if (Solver == 'SMW'){
       wbeta = smw(R,Z,ZT,yunit,schurmat,schurvec,normy,const,rhs)
     }
-
+    
     # update r
     w = wbeta[1:dim]
     beta = wbeta[dim+1]
-    ZTwpbetay = as.matrix(ZT %*% w) + beta*y
+    ZTwpbetay = ZT %*% w + beta*y
     cc = ZTwpbetay + xiold - alphaold/sigma;
     runNewton = polyRootsNewton(cc,expon,sigma,rold)
     r = runNewton[1:n]
@@ -270,7 +244,7 @@ genDWD = function(X,y,C,expon, tol = 1e-5, maxIter = 2000, method = 1, printDeta
       if ((doublecompute_measure > 10) || (iter < 50)){
         doublecompute = doublecompute + 1
         tmpnew = r - xiold + alphaold/sigma 
-        rhsnew1 = as.matrix(Z %*% tmpnew) + const*uold + pold/sigma
+        rhsnew1 = Z %*% tmpnew + const*uold + pold/sigma
         rhsnew = rbind(rhsnew1,t(y) %*% tmpnew)
         if (Solver == 'iterative'){
           runpsqmr = psqmr(ff,rhsnew,L,wbeta,psqmrTol,psqmrMaxiter)
@@ -290,7 +264,7 @@ genDWD = function(X,y,C,expon, tol = 1e-5, maxIter = 2000, method = 1, printDeta
         }
         w = wbeta[1:dim]
         beta = wbeta[dim+1]
-        ZTwpbetay = as.matrix(ZT %*% w) + beta*y
+        ZTwpbetay = ZT %*% w + beta*y
       }
     }
     else{
@@ -311,8 +285,8 @@ genDWD = function(X,y,C,expon, tol = 1e-5, maxIter = 2000, method = 1, printDeta
     
     # check for termination
     rexpon1 = r^(expon+1); 
-    comp1 = abs(t(y) %*% alpha)
-    comp2 = abs(t(xi) %*% (Cvec-alpha));      
+    comp1 = as.numeric(abs(t(y) %*% alpha));
+    comp2 = as.numeric(abs(t(xi) %*% (Cvec-alpha)));      
     comp3 = min(fnorm(alpha*rexpon1-expon),fnorm(alpha-expon/rexpon1)^2); 
     relcomp = max(comp1,comp2,comp3)/(1+maxC); 
     primfeas = max(fnorm(Rp),fnorm(w-u),max(fnorm(w)-Zscale,0))/(1+maxC);      
@@ -323,7 +297,7 @@ genDWD = function(X,y,C,expon, tol = 1e-5, maxIter = 2000, method = 1, printDeta
       primobj2 = sum(Cvec*xi)+1e-8
       primobj = primobj1 + primobj2
       kappa = ((expon+1)/expon)*expon^(1/(expon+1));          
-      dualobj = kappa*sum(pmax(0,alpha)^(expon/(expon+1)))-Zscale*fnorm(as.matrix(Z %*% alpha))
+      dualobj = kappa*sum(pmax(0,alpha)^(expon/(expon+1)))-Zscale*fnorm(Z %*% alpha)
       relgap = abs(primobj-dualobj)/(1+abs(primobj)+abs(dualobj))
     }
     tol2 = 0.1/2
@@ -395,12 +369,12 @@ genDWD = function(X,y,C,expon, tol = 1e-5, maxIter = 2000, method = 1, printDeta
   ## End of main loop
   ##
   
-  Zalpha = as.matrix(Z %*% alpha)
+  Zalpha = Z %*% alpha
   w = w/Zscale;
   
   # Calculate train error
-  res = t(X) %*% w + beta*as.matrix.csr(1,n,1)
-  error = length(which(y*sign(res@ra)<=0))/n*100
+  res = t(X) %*% w + beta
+  error = length(which(y*sign(res@x)<=0))/n*100
   
   cat(sprintf('\n sample size = %3.0f, feature dimension = %3.0f',n,dim));
   cat(sprintf('\n positve sample = %3.0f, negative sample = %3.0f',np,nn));
@@ -445,7 +419,7 @@ linsysolve = function(R,r){
   if(is.matrix(R)){
     x = backsolve(R,forwardsolve(t(R),r))
   }else{
-    x = backsolve(R,r)
+    x = solve(R,r)
   }
   
   return(x)
@@ -456,16 +430,16 @@ linsysolve = function(R,r){
 smw = function(R,Z,ZT,yunit,schurmat,schurvec,normy,const,r){
   n = length(yunit)
   dim = length(r) - 1
-  b1 = (1/const)*as.matrix(ZT %*% r[1:dim]) + (r[dim+1]/normy)*yunit
+  b1 = (1/const)*(ZT %*% r[1:dim]) + (r[dim+1]/normy)*yunit
   b2 = r[dim+1]/normy
   b = rbind(b1,b2)
   
   ##
   tmpvec = (t(schurvec) %*% b/schurmat) %*% schurvec
-  a1 = backsolve(R,b1) - tmpvec[1:n]
+  a1 = solve(R,b1) - tmpvec[1:n]
   a2 = -b2 - tmpvec[n+1]
   q = matrix(0,dim+1,1)
-  q[1:dim] = (1/const)*(as.matrix(Z %*% (-a1)) + r[1:dim])
+  q[1:dim] = (1/const)*(Z %*% (-a1) + r[1:dim])
   q[dim+1] = (1/normy)*(r[dim+1]/normy - t(yunit)%*%a1 - a2)
   
   return (q)
@@ -473,12 +447,8 @@ smw = function(R,Z,ZT,yunit,schurmat,schurvec,normy,const,r){
 ##**********************************************************************
 ##**********************************************************************
 fnorm = function(x){
-    if (typeof(x) == "S4"){
-      xentry = x@ra
-      return (sqrt(sum(xentry * xentry)))
-    }else{
-      return (sqrt(sum(x*x)))
-    }
+
+  return (sqrt(sum(x*x)))
 
 }
 ##**********************************************************************
@@ -630,7 +600,7 @@ psqmr = function(ff,b,L,x0,tol,maxit){
     err = fnorm(res)
     resnrm = c(resnrm,err)
     if (err < minres) minres = err
-    if ((err < tol) && (iter > miniter) && (t(b) %*% x > 0)) break
+    if ((err < tol) && (iter > miniter) && (as.numeric(t(b) %*% x) > 0)) break
     if ((iter > stagnate_check) && (iter > 10)){
       ratio = resnrm[(iter-9):(iter+1)]/resnrm[(iter-10):iter]
       if ((min(ratio) > 0.997) && (max(ratio) < 1.003)){
@@ -672,7 +642,7 @@ precondfun = function(L,r){
     q = L$invdiagM * r
   }
   else if (precond == 2){
-    q = backsolve(L$R,r)
+    q = solve(L$R,r)
   }
   
   return(q)
@@ -686,9 +656,9 @@ vecMultiply = function(ff,x){
   const = ff$const
   d = length(x) - 1
   w = x[1:d]; beta = x[d+1]
-  tmp = as.matrix(ZT %*% w) + beta*y
+  tmp = ZT %*% w + beta*y
   Aq = matrix(0,d+1,1)
-  Aq[1:d] = as.matrix(Z %*% tmp) + const*w
+  Aq[1:d] = Z %*% tmp + const*w
   Aq[d+1] = t(y) %*% tmp
   
   return (Aq)

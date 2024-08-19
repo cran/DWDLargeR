@@ -1,4 +1,4 @@
-import("Matrix","SparseM")
+import("Matrix")
 
 export(genDWD,sigma_update,linsysolve,smw,fnorm,penaltyParameter,polyRootsNewton,psqmr,precondfun,vecMultiply)
 

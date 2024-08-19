@@ -13,10 +13,10 @@ penaltyParameter = function(X,y,expon,rmzeroFea = 1, scaleFea = 1){
   ## remove zero features
   ##
   if (rmzeroFea!=0){
-    normX = sqrt(rowSums(as(X*X,"dgCMatrix")))
+    normX = sqrt(rowSums(X*X))
     nzrow = which(normX>0)
     if (length(nzrow) < length(normX)){
-      X = rbind(X[nzrow,1:sampsize], 0*as.matrix.csr(1,1,sampsize))
+      X = X[nzrow,1:sampsize]
       dim = nrow(X)
     }
   }
@@ -27,14 +27,14 @@ penaltyParameter = function(X,y,expon,rmzeroFea = 1, scaleFea = 1){
   if (scaleFea!=0){
     DD = 1
     if(dim > 0.5*sampsize){
-      normX = sqrt(rowSums(as(X*X,"dgCMatrix")))
+      normX = sqrt(rowSums(X*X))
       cat(sprintf('\n max-normX, min-normX = %3.2e, %3.2e',max(normX),min(normX)))
       if (max(normX) > 2*min(normX)){
         if (dim > 3*sampsize){
-          DD = new("matrix.csr", ra = 1/pmax(1,sqrt(normX)), ja = 1:dim, ia = 1:(dim+1), dimension = c(dim,dim))
+          DD = sparseMatrix(x = 1/pmax(1,sqrt(normX)), j = 1:dim, p = 0:dim)
         }
         else{
-          DD = new("matrix.csr", ra = 1/pmax(1,normX), ja = 1:dim, ia = 1:(dim+1), dimension = c(dim,dim))
+          DD = sparseMatrix(x = 1/pmax(1,normX), j = 1:dim, p = 0:dim)
         }
         X = DD %*% X
       }
